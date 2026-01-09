@@ -1,0 +1,183 @@
+# =============================================================================
+# GitHub Actions - Pipeline CI/CD
+# =============================================================================
+# Ce workflow démontre un pipeline complet :
+# - Tests et validation du code
+# - Build et push de l'image Docker
+# - Déploiement sur Render.com (gratuit)
+# =============================================================================
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:  # Permet le déclenchement manuel
+
+env:
+  NODE_VERSION: '20'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ===========================================================================
+  # Job 1: Tests et Qualité du Code
+  # ===========================================================================
+  test:
+    name: 🧪 Tests & Lint
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout du code
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 📚 Installation des dépendances
+        run: npm ci
+
+      - name: 🔍 Linting du code
+        run: npm run lint --if-present
+        continue-on-error: true
+
+      - name: ✅ Exécution des tests
+        run: npm test
+
+      - name: 📊 Résumé des tests
+        if: always()
+        run: echo "Tests completed"
+
+  # ===========================================================================
+  # Job 2: Build de l'image Docker
+  # ===========================================================================
+  build:
+    name: 🐳 Build Docker
+    runs-on: ubuntu-latest
+    needs: test
+    
+    permissions:
+      contents: read
+      packages: write
+    
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+      image_digest: ${{ steps.build.outputs.digest }}
+
+    steps:
+      - name: 📥 Checkout du code
+        uses: actions/checkout@v4
+
+      - name: 🐳 Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 🔐 Connexion au GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🏷️ Extraction des métadonnées Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix=
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: 🔨 Build et Push de l'image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            APP_VERSION=${{ github.sha }}
+
+      - name: 📋 Résumé du build
+        run: |
+          echo "### 🐳 Docker Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Tags:** ${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+
+  # ===========================================================================
+  # Job 3: Scan de sécurité de l'image
+  # ===========================================================================
+  security-scan:
+    name: 🔒 Security Scan
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name != 'pull_request'
+    
+    permissions:
+      security-events: write
+    
+    steps:
+      - name: 📥 Checkout du code
+        uses: actions/checkout@v4
+
+      - name: 🔍 Scan avec Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+        continue-on-error: true
+
+      - name: 📤 Upload des résultats Trivy
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+        continue-on-error: true
+
+  # ===========================================================================
+  # Job 4: Déploiement (Render.com - Gratuit)
+  # ===========================================================================
+  deploy:
+    name: 🚀 Deploy to Render
+    runs-on: ubuntu-latest
+    needs: [build, security-scan]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.url }}
+
+    steps:
+      - name: 🚀 Trigger Render Deploy
+        id: deploy
+        run: |
+          # Render.com déploie automatiquement via webhook
+          # Configurez RENDER_DEPLOY_HOOK_URL dans les secrets GitHub
+          if [ -n "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" ]; then
+            curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+            echo "url=https://votre-app.onrender.com" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ RENDER_DEPLOY_HOOK_URL non configuré"
+            echo "url=https://example.onrender.com" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 📋 Résumé du déploiement
+        run: |
+          echo "### 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** Production" >> $GITHUB_STEP_SUMMARY
+          echo "**Platform:** Render.com" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY

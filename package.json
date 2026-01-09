@@ -1,0 +1,19 @@
+{
+  "name": "ci-cd-demo-app",
+  "version": "1.0.0",
+  "description": "Application de démonstration pour le cours CI/CD GitLab et GitHub Actions",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test src/**/*.test.js",
+    "lint": "eslint src/",
+    "build": "echo 'Build completed successfully'"
+  },
+  "keywords": ["cicd", "demo", "nodejs", "docker"],
+  "author": "Emmanuel - Cours CI/CD",
+  "license": "MIT",
+  "devDependencies": {
+    "eslint": "^9.0.0"
+  }
+}

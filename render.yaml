@@ -1,0 +1,30 @@
+# =============================================================================
+# Render.com Blueprint - Configuration Infrastructure as Code
+# =============================================================================
+# Ce fichier permet de déployer automatiquement l'application sur Render.com
+# Render offre un tier gratuit généreux pour les projets personnels
+# =============================================================================
+
+services:
+  # Service Web principal
+  - type: web
+    name: cicd-demo-app
+    env: docker
+    # Région (optionnel - Frankfurt pour l'Europe)
+    region: frankfurt
+    # Plan gratuit
+    plan: free
+    # Branche à déployer
+    branch: main
+    # Configuration du health check
+    healthCheckPath: /api/health
+    # Variables d'environnement
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: APP_NAME
+        value: "CI/CD Demo App"
+    # Auto-deploy sur push
+    autoDeploy: true

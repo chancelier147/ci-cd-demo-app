@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CI/CD Demo App</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 CI/CD Demo Application</h1>
+            <p class="subtitle">Démonstration GitLab CI/CD & GitHub Actions</p>
+        </header>
+
+        <main>
+            <section class="card">
+                <h2>📊 Informations de l'application</h2>
+                <div id="app-info" class="info-grid">
+                    <div class="loading">Chargement...</div>
+                </div>
+            </section>
+
+            <section class="card">
+                <h2>🔍 État du système</h2>
+                <div class="status-container">
+                    <div class="status-item">
+                        <span class="status-label">Health Check</span>
+                        <span id="health-status" class="status-badge pending">...</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Readiness</span>
+                        <span id="ready-status" class="status-badge pending">...</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card">
+                <h2>📚 Endpoints API</h2>
+                <ul class="api-list">
+                    <li><code>GET /api/info</code> - Informations de l'application</li>
+                    <li><code>GET /api/health</code> - Health check (liveness probe)</li>
+                    <li><code>GET /api/ready</code> - Readiness probe</li>
+                </ul>
+            </section>
+        </main>
+
+        <footer>
+            <p>Cours CI/CD - GitLab & GitHub Actions</p>
+            <p class="version" id="footer-version"></p>
+        </footer>
+    </div>
+
+    <script>
+        async function fetchAppInfo() {
+            try {
+                const response = await fetch('/api/info');
+                const data = await response.json();
+                
+                document.getElementById('app-info').innerHTML = `
+                    <div class="info-item">
+                        <span class="label">Application</span>
+                        <span class="value">${data.name}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Version</span>
+                        <span class="value">${data.version}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Environnement</span>
+                        <span class="value env-${data.environment}">${data.environment}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Node.js</span>
+                        <span class="value">${data.nodejs}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Uptime</span>
+                        <span class="value">${Math.round(data.uptime)}s</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="label">Timestamp</span>
+                        <span class="value">${new Date(data.timestamp).toLocaleString('fr-FR')}</span>
+                    </div>
+                `;
+                
+                document.getElementById('footer-version').textContent = `v${data.version}`;
+            } catch (error) {
+                document.getElementById('app-info').innerHTML = 
+                    '<div class="error">Erreur de chargement</div>';
+            }
+        }
+
+        async function checkHealth() {
+            try {
+                const response = await fetch('/api/health');
+                const data = await response.json();
+                const badge = document.getElementById('health-status');
+                badge.textContent = data.status;
+                badge.className = 'status-badge healthy';
+            } catch {
+                const badge = document.getElementById('health-status');
+                badge.textContent = 'unhealthy';
+                badge.className = 'status-badge unhealthy';
+            }
+        }
+
+        async function checkReady() {
+            try {
+                const response = await fetch('/api/ready');
+                const data = await response.json();
+                const badge = document.getElementById('ready-status');
+                badge.textContent = data.ready ? 'ready' : 'not ready';
+                badge.className = `status-badge ${data.ready ? 'healthy' : 'unhealthy'}`;
+            } catch {
+                const badge = document.getElementById('ready-status');
+                badge.textContent = 'not ready';
+                badge.className = 'status-badge unhealthy';
+            }
+        }
+
+        // Chargement initial
+        fetchAppInfo();
+        checkHealth();
+        checkReady();
+
+        // Rafraîchissement automatique
+        setInterval(fetchAppInfo, 30000);
+        setInterval(checkHealth, 10000);
+        setInterval(checkReady, 10000);
+    </script>
+</body>
+</html>
